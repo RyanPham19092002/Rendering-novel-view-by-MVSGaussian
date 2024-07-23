@@ -12,18 +12,30 @@ from lib.utils.video_utils import *
 if cfg.fix_random:
     random.seed(0)
     np.random.seed(0)
+def rgb_to_depth_map(rgb_image, far_plane=1000.0):
+    """Chuyển đổi ảnh RGB thành depth map."""
+    B = rgb_image[:, :, 0].astype(np.float32)
+    G = rgb_image[:, :, 1].astype(np.float32)
+    R = rgb_image[:, :, 2].astype(np.float32)
 
+    depth_map = R + G * 256 + B * 256 * 256
+    depth_map = depth_map / (256 * 256 * 256 - 1)  # Chuẩn hóa giá trị
+    depth_map *= far_plane
+    return depth_map
 class Dataset:
     def __init__(self, **kwargs):
         super(Dataset, self).__init__()
         self.data_root = os.path.join(cfg.workspace, kwargs['data_root'])
+        print("data_root", self.data_root)
         self.split = kwargs['split']
+        print(self.split)
         if 'scene' in kwargs:
             self.scenes = [kwargs['scene']]
         else:
             self.scenes = []
         self.build_metas(kwargs['ann_file'])
-        self.depth_ranges = [425., 905.]
+        self.depth_ranges = [100., 1000.]
+        # self.depth_ranges = [10., 1000.]
         self.zfar = 100.0
         self.znear = 0.01
         self.trans = [0.0, 0.0, 0.0]
@@ -37,66 +49,127 @@ class Dataset:
         self.metas = []
         if len(self.scenes) != 0:
             scenes = self.scenes
-
+            
+        count = 0
         for scene in scenes:
-            scene_info = {'ixts': [], 'exts': [], 'dpt_paths': [], 'img_paths': []}
-            for i in range(49):
-                cam_path = os.path.join(self.data_root, 'Cameras/train/{:08d}_cam.txt'.format(i))
-                ixt, ext, _ = data_utils.read_cam_file(cam_path)
-                ext[:3, 3] = ext[:3, 3]
-                ixt[:2] = ixt[:2] * 4
-                dpt_path = os.path.join(self.data_root, 'Depths_raw/{}/depth_map_{:04d}.pfm'.format(scene, i))
-                img_path = os.path.join(self.data_root, 'Rectified/{}_train/rect_{:03d}_3_r5000.png'.format(scene, i+1))
-                scene_info['ixts'].append(ixt.astype(np.float32))
-                scene_info['exts'].append(ext.astype(np.float32))
-                scene_info['dpt_paths'].append(dpt_path)
-                scene_info['img_paths'].append(img_path)
+                
+            # if count == 2:
+            #     exit(0)
+            # count += 1
+            # scene_info = {'ixts': [], 'exts': [], 'dpt_paths': [], 'img_paths': []}
+            # scene_info = {'ixts': [], 'exts': [], 'img_paths': []}
+            print("scene", os.path.join(self.data_root,self.split, f'{scene}'))
+            view = int(scene.split("_")[-1])
+                # j = 0
+            for j in range(4):
+                scene_info = {'ixts': [], 'exts': [], 'dpt_paths': [], 'img_paths': []}
+                for i in range(6):
+                    cam_path = os.path.join(self.data_root, f'camera/input_camera_{i+1+(view-1)*20 + j*5}.txt')
+                    ixt, ext, _ = data_utils.read_cam_file(cam_path)
+                    ext[:3, 3] = ext[:3, 3]
+                    ixt[:2] = ixt[:2] * 4
+                    dpt_path = os.path.join(self.data_root,self.split, f'{scene}/input_images_raw/input_camera_{i+1+(view-1)*20 + j*5}.png')
+                    # print("dpt_path", dpt_path)
+                    img_path = os.path.join(self.data_root,self.split, f'{scene}/input_images/input_camera_{i+1+(view-1)*20 + j*5}.png')
+                    # print("img_path", img_path)
+                    # exit(0)
+                    scene_info['ixts'].append(ixt.astype(np.float32))
+                    scene_info['exts'].append(ext.astype(np.float32))
+                    scene_info['dpt_paths'].append(dpt_path)
+                    scene_info['img_paths'].append(img_path)
+                
 
-            if self.split == 'train' and len(self.scenes) != 1:
-                train_ids = np.arange(49).tolist()
-                test_ids = np.arange(49).tolist()
-            elif self.split == 'train' and len(self.scenes) == 1:
-                train_ids = dtu_pairs['dtu_train']
-                test_ids = dtu_pairs['dtu_train']
-            else:
-                train_ids = dtu_pairs['dtu_train']
-                test_ids = dtu_pairs['dtu_val']
-            scene_info.update({'train_ids': train_ids, 'test_ids': test_ids})
-            self.scene_infos[scene] = scene_info
-
-            cam_points = np.array([np.linalg.inv(scene_info['exts'][i])[:3, 3] for i in train_ids])
-            for tar_view in test_ids:
-                cam_point = np.linalg.inv(scene_info['exts'][tar_view])[:3, 3]
-                distance = np.linalg.norm(cam_points - cam_point[None], axis=-1)
-                argsorts = distance.argsort()
-                argsorts = argsorts[1:] if tar_view in train_ids else argsorts
-                input_views_num = cfg.mvsgs.train_input_views[1] + 1 if self.split == 'train' else cfg.mvsgs.test_input_views
-                src_views = [train_ids[i] for i in argsorts[:input_views_num]]
-                self.metas += [(scene, tar_view, src_views)]
-
+                if self.split == 'train' and len(self.scenes) != 1:
+                    # train_ids = np.arange(49).tolist()
+                    # test_ids = np.arange(49).tolist()
+                    train_ids = np.arange(21).tolist()
+                    test_ids = np.arange(21).tolist()
+                elif self.split == 'train' and len(self.scenes) == 1:
+                    train_ids = dtu_pairs['dtu_train']
+                    test_ids = dtu_pairs['dtu_train']
+                else:
+                    train_ids = dtu_pairs['dtu_train']
+                    test_ids = dtu_pairs['dtu_val']
+                train_ids = np.arange(5).tolist()
+                # train_ids = [0, 5]
+                test_ids = np.random.randint(1, 4, size=1)
+                scene_info.update({'train_ids': train_ids, 'test_ids': test_ids})
+                new_scene = scene + f"_part_{j}"
+                self.scene_infos[new_scene] = scene_info
+                # print("scene_infos", self.scene_infos)
+                # print("\n")
+                # print("----------------------------------------------------------------------------------")
+                # print("self.scene_infos", self.scene_infos)
+                # print(np.linalg.inv(scene_info['exts'][0])[:3, 3])
+                # exit(0)
+                cam_points = np.array([np.linalg.inv(scene_info['exts'][i])[:3, 3] for i in train_ids])     
+                for tar_view in test_ids:
+                    threshold_random = np.random.rand()
+                    if threshold_random > 0.5:
+                        cam_point = np.linalg.inv(scene_info['exts'][tar_view])[:3, 3]
+                        distance = np.linalg.norm(cam_points - cam_point[None], axis=-1)
+                        argsorts = distance.argsort()
+                        argsorts = argsorts[1:] if tar_view in train_ids else argsorts
+                        # input_views_num = cfg.mvsgs.train_input_views[0] if self.split == 'train' else cfg.mvsgs.test_input_views
+                        input_views_num = cfg.mvsgs.train_input_views[0] if self.split == 'train' else cfg.mvsgs.test_input_views
+                        src_views = [train_ids[i] for i in argsorts[:input_views_num]]
+                        # print(src_views)
+                    else:
+                        src_views = [0,5]
+                    
+                    self.metas += [(new_scene, tar_view, src_views)]
+                    # print("threshold - self.metas",threshold_random,  (new_scene, tar_view, src_views))
+                
+            # exit(0)
     def __getitem__(self, index_meta):
         index, input_views_num = index_meta
         scene, tar_view, src_views = self.metas[index]
+
+  
+
         if self.split == 'train':
             if random.random() < 0.1:
                 src_views = src_views + [tar_view]
             src_views = random.sample(src_views[:input_views_num+1], input_views_num)
+
+            # src_views = random.sample(src_views[:input_views_num], input_views_num)
+        src_views.sort()
         scene_info = self.scene_infos[scene]
 
         tar_img = np.array(imageio.imread(scene_info['img_paths'][tar_view])) / 255.
         H, W = tar_img.shape[:2]
+        # print("H, W", H, W)
+        # exit(0)
         tar_ext, tar_ixt = scene_info['exts'][tar_view], scene_info['ixts'][tar_view]
         if self.split != 'train': # only used for evaluation
-            tar_dpt = data_utils.read_pfm(scene_info['dpt_paths'][tar_view])[0].astype(np.float32)
-            tar_dpt = cv2.resize(tar_dpt, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_NEAREST)
-            tar_dpt = tar_dpt[44:556, 80:720]
+            # tar_dpt = data_utils.read_pfm(scene_info['dpt_paths'][tar_view])[0].astype(np.float32)
+            # tar_dpt = cv2.resize(tar_dpt, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_NEAREST)
+            # tar_dpt = tar_dpt[44:556, 80:720]
+            # tar_mask = (tar_dpt > 0.).astype(np.uint8)
+            rgb_image = cv2.imread(scene_info['dpt_paths'][tar_view], cv2.IMREAD_COLOR)
+    
+            if rgb_image is None:
+                raise FileNotFoundError(f"Không tìm thấy ảnh tại {scene_info['dpt_paths'][tar_view]}")
+
+            # Chuyển đổi ảnh RGB thành depth map
+            tar_dpt = rgb_to_depth_map(rgb_image)
+
+            # Thay đổi kích thước ảnh
+            # tar_dpt = cv2.resize(tar_dpt, None, fx=1, fy=1, interpolation=cv2.INTER_NEAREST)
+            # print("tar_dpt shape", tar_dpt.shape)
+            # Cắt vùng quan tâm
+            # tar_dpt = tar_dpt[44:556, 80:720]
+
+            # Tạo mặt nạ
             tar_mask = (tar_dpt > 0.).astype(np.uint8)
         else:
             tar_dpt = np.ones_like(tar_img)
             tar_mask = np.ones_like(tar_img)
 
+        # print("src_views", src_views)
         src_inps, src_exts, src_ixts = self.read_src(scene_info, src_views)
-
+        
+        # exit(0)
         ret = {'src_inps': src_inps,
                'src_exts': src_exts,
                'src_ixts': src_ixts}
@@ -200,11 +273,18 @@ class Dataset:
         return poses_paths
 
     def read_src(self, scene_info, src_views):
+       
         inps, exts, ixts = [], [], []
+        # print("src_views\n", src_views)
+        # print("scene_info['img_paths']\n", scene_info['img_paths']) 
+        # print("scene_info['exts']\n", scene_info['exts']) 
         for src_view in src_views:
+            # print("scene_info['img_paths']", scene_info['img_paths'][src_view])  
             inps.append((np.array(imageio.imread(scene_info['img_paths'][src_view])) / 255.) * 2. - 1.)
             exts.append(scene_info['exts'][src_view])
             ixts.append(scene_info['ixts'][src_view])
+        # print("exts\n", exts)
+        # print("--------------------------------------------------------------------------")
         return np.stack(inps).transpose((0, 3, 1, 2)).astype(np.float32), np.stack(exts), np.stack(ixts)
 
     def __len__(self):

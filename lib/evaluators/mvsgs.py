@@ -33,7 +33,7 @@ class Evaluator:
             self.mvs_acc_10 = []
         os.system('mkdir -p ' + cfg.result_dir)
 
-    def evaluate(self, output, batch):
+    def evaluate(self, output, batch, epoch=None):
         B, S, _, H, W = batch['src_inps'].shape
         for i in range(cfg.mvsgs.cas_config.num):
             if not cfg.mvsgs.cas_config.render_if[i]:
@@ -58,7 +58,11 @@ class Evaluator:
                     self.scene_lpips[batch['meta']['scene'][b]+f'_level{i}'] = []
                 if cfg.save_result and i == cfg.mvsgs.cas_config.num-1:
                     img = img_utils.horizon_concate(gt_rgb[b], pred_rgb[b])
-                    img_path = os.path.join(cfg.result_dir, '{}_{}_{}.png'.format(batch['meta']['scene'][b], batch['meta']['tar_view'][b].item(), batch['meta']['frame_id'][b].item()))
+                    if epoch != None:
+                        img_path = os.path.join(cfg.result_dir,f"epoch_{epoch}", '{}_{}_{}.png'.format(batch['meta']['scene'][b], batch['meta']['tar_view'][b].item(), batch['meta']['frame_id'][b].item()))
+                        os.makedirs(os.path.join(cfg.result_dir,f"epoch_{epoch}"), exist_ok = True)
+                    else:
+                        img_path = os.path.join(cfg.result_dir, '{}_{}_{}.png'.format(batch['meta']['scene'][b], batch['meta']['tar_view'][b].item(), batch['meta']['frame_id'][b].item()))
                     imageio.imwrite(img_path, (img*255.).astype(np.uint8))
 
                 mask = masks[b] == 1

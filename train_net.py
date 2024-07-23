@@ -8,6 +8,34 @@ import torch.multiprocessing
 import torch
 import torch.distributed as dist
 import os
+import torch
+from torch.utils.data import Subset, SubsetRandomSampler
+import numpy as np
+
+def get_subset_loader(val_loader, subset_ratio=0.1):
+    # Lấy dataset từ val_loader
+    dataset = val_loader.dataset
+    
+    # Tính toán số lượng mẫu cần thiết
+    total_size = len(dataset)
+    subset_size = int(total_size * subset_ratio)
+    
+    # Tạo danh sách các chỉ số cho subset
+    indices = list(range(total_size))
+    subset_indices = torch.randperm(total_size).tolist()[:subset_size]
+
+    # Tạo sampler cho subset
+    subset_sampler = SubsetRandomSampler(subset_indices)
+    
+    # Tạo DataLoader cho subset
+    subset_loader = DataLoader(dataset,
+                              sampler=subset_sampler,
+                              batch_size=val_loader.batch_size,
+                              num_workers=val_loader.num_workers,
+                              collate_fn=val_loader.collate_fn,
+                              worker_init_fn=val_loader.worker_init_fn)
+    
+    return subset_loader
 
 if cfg.fix_random:
     torch.manual_seed(0)
@@ -20,6 +48,7 @@ def train(cfg, network):
                                     is_train=True,
                                     is_distributed=cfg.distributed,
                                     max_iter=cfg.ep_iter)
+
     if cfg.skip_eval:
         val_loader = None
     else:
@@ -107,6 +136,9 @@ def train(cfg, network):
 def test(cfg, network):
     trainer = make_trainer(cfg, network)
     val_loader = make_data_loader(cfg, is_train=False)
+    # print("val_loader", len(val_loader))
+    # val_loader_sub = get_subset_loader(val_loader)
+    # print("val_loader_sub",len(val_loader_sub))
     evaluator = make_evaluator(cfg)
     epoch = load_network(network,
                          cfg.trained_model_dir,

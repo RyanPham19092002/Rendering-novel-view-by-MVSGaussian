@@ -5,9 +5,14 @@ import tqdm
 from torch.nn.parallel import DistributedDataParallel
 from lib.config import cfg
 from lib.utils.data_utils import to_cuda
+import numpy as np
+import torch
+from torch.utils.data import DataLoader, SubsetRandomSampler
+
 
 
 class Trainer(object):
+    
     def __init__(self, network):
         device = torch.device('cuda:{}'.format(cfg.local_rank))
         network = network.to(device)
@@ -23,7 +28,22 @@ class Trainer(object):
         self.local_rank = cfg.local_rank
         self.device = device
         self.global_step = 0
-
+    def get_subset_loader(data_loader, fraction=0.1):
+        dataset_size = len(data_loader)  # Lấy kích thước của toàn bộ dataset
+        indices = list(range(dataset_size))  # Tạo danh sách các chỉ số
+        split = int(np.floor(fraction * dataset_size))  # Tính số lượng mẫu cần lấy
+        np.random.shuffle(indices)  # Xáo trộn chỉ số ngẫu nhiên
+        subset_indices = indices[:split]  # Chọn chỉ số của phần mẫu cần thiết
+        
+        subset_sampler = SubsetRandomSampler(subset_indices)  # Tạo sampler cho phần dữ liệu con
+        subset_loader = DataLoader(
+            data_loader.dataset,
+            batch_size=data_loader.batch_size,
+            sampler=subset_sampler,
+            num_workers=data_loader.num_workers,
+            pin_memory=data_loader.pin_memory
+        )
+        return subset_loader
     def reduce_loss_stats(self, loss_stats):
         reduced_losses = {k: torch.mean(v) for k, v in loss_stats.items()}
         return reduced_losses
@@ -96,6 +116,7 @@ class Trainer(object):
         torch.cuda.empty_cache()
         val_loss_stats = {}
         image_stats = {}
+        # data_loader = self.get_subset_loader(data_loader_ori)
         data_size = len(data_loader)
         for batch in tqdm.tqdm(data_loader):
             batch = to_cuda(batch, self.device)
@@ -103,7 +124,7 @@ class Trainer(object):
             with torch.no_grad():
                 output, loss, loss_stats, _ = self.network(batch)
                 if evaluator is not None:
-                    image_stats_ = evaluator.evaluate(output, batch)
+                    image_stats_ = evaluator.evaluate(output, batch, epoch)
                     if image_stats_ is not None:
                         image_stats.update(image_stats_)
 

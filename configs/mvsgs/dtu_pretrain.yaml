@@ -18,9 +18,9 @@ dir_ply: 'mvsgs_pointcloud'
 
 # task config
 mvsgs:
-    train_input_views: [2, 3, 4]
-    train_input_views_prob: [0.1, 0.8, 0.1]
-    test_input_views: 3
+    train_input_views: [2]
+    train_input_views_prob: [1.0]
+    test_input_views: 2
     scale_factor: 1
     viewdir_agg: True 
     chunk_size: 1000000
@@ -47,14 +47,15 @@ mvsgs:
         loss_weight: [0.5, 1.]
 
 
+
 train_dataset:
-    data_root: 'mvs_training/dtu/' #
+    data_root: '/data/Phat/VinAI/subdata_mvsgaussian_depth_route1_route2_p2/' #
     ann_file: 'data/mvsgs/dtu_train_all.txt'
     split: 'train'
     input_ratio: 1.
 
 test_dataset:
-    data_root: 'mvs_training/dtu/' #
+    data_root: '/data/Phat/VinAI/subdata_mvsgaussian_depth_route1_route2_p2' #
     ann_file: 'data/mvsgs/dtu_val_all.txt'
     split: 'test'
     input_ratio: 1.
@@ -71,8 +72,8 @@ train:
     batch_sampler: 'mvsgs'
     collator: 'mvsgs' 
     sampler_meta:
-        input_views_num: [2, 3, 4] 
-        input_views_prob: [0.1, 0.8, 0.1]
+        input_views_num: [2] 
+        input_views_prob: [1.0]
     num_workers: 4
 
 test:
@@ -80,7 +81,7 @@ test:
     collator: 'mvsgs' 
     batch_sampler: 'mvsgs'
     sampler_meta:
-        input_views_num: [3] 
+        input_views_num: [2] 
         input_views_prob: [1.]
 
 ep_iter: 1000
