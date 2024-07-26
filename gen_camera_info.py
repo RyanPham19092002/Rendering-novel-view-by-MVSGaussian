@@ -38,7 +38,7 @@ def main(json_file, output_dir):
         matrix = np.array(matrix_list)
         
         # Scale ma trận
-        scaled_matrix = scale_matrix(matrix, 640 / 320, 512 / 200)
+        scaled_matrix = scale_matrix(matrix, 640 / 320, 512 / 200)        #Ảnh gốc kích thước 320x200, nếu ảnh gốc kích thước 640x512 thì comment dòng này
         
         # Chuyển ma trận từ cam2world sang world2cam
         world2cam_matrix = np.linalg.inv(scaled_matrix)
